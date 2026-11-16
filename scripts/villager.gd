@@ -30,11 +30,18 @@ var anim_index := {}            # short animation name -> "Library/name"
 
 var state := "unknown"
 var status_text := ""
+var talking := false            # Zali is chatting with this villager (v3)
+var npc_chat := false           # chatting with another villager
+var job_busy := false           # v2: Zali just gave it a job, show the work animation
+var last_info := {}             # last status from 19 (for greetings and small talk)
 
 var _body: Node3D
 var _anim: AnimationPlayer
 var _name_label: Label3D
 var _status_label: Label3D
+var _bubble: Label3D
+var _bubble_text := ""
+var _talk_point := Vector3.ZERO
 var _wants_hut := false
 var _path: Array[Vector3] = []
 var _next_stroll := 3.0
@@ -65,6 +72,12 @@ func setup(model: PackedScene, libraries: Dictionary, gear: Dictionary) -> void:
 	_name_label.offset = Vector2(0, 46)
 	_name_label.text = cls
 	_status_label = _make_label(34, STATE_COLORS["unknown"], 1.3)
+	# Speech bubble above the name: "..." while the villager is thinking (v3 talk).
+	_bubble = _make_label(32, Color("ffffff"), 1.3)
+	_bubble.offset = Vector2(0, 90)
+	_bubble.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_bubble.width = 700
+	_bubble.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
 	position = home
 	rotation.y = face_home
 	_yaw_target = face_home
@@ -90,6 +103,8 @@ func _make_label(font_size: int, color: Color, height: float) -> Label3D:
 ## Called by village.gd with this agent's part of the 19 Village Status JSON.
 func apply(info: Dictionary) -> void:
 	state = str(info.get("state", "unknown"))
+	if state != "unknown":
+		last_info = info
 	# "unknown" = feed down: stay where you are.
 	if state != "unknown" and not stays_home and not player_controlled:
 		var wants := state == "failed"
@@ -130,10 +145,26 @@ static func ago_text(seconds: int) -> String:
 	return "%d d ago" % int(seconds / 86400.0)
 
 
-## Walk around the ring road (so nobody walks through the castle), then to the target.
+func wants_hut() -> bool:
+	return _wants_hut
+
+
+## Small talk: walk to a meeting spot / walk back home.
+func meet_at(p: Vector3) -> void:
+	_route_to(p)
+
+
+func go_home() -> void:
+	_route_to(home)
+
+
 func _route(to_hut: bool) -> void:
+	_route_to(hut_spot if to_hut else home)
+
+
+## Walk around the ring road (so nobody walks through the castle), then to the target.
+func _route_to(target: Vector3) -> void:
 	_path.clear()
-	var target := hut_spot if to_hut else home
 	var a0 := atan2(position.x, position.z)
 	var a1 := atan2(target.x, target.z)
 	var diff := wrapf(a1 - a0, -PI, PI)
@@ -142,6 +173,18 @@ func _route(to_hut: bool) -> void:
 		var a := a0 + diff * float(i) / float(steps)
 		_path.append(Vector3(sin(a), 0.0, cos(a)) * ARC_RADIUS)
 	_path.append(target)
+
+
+## v3 talk: show a bubble ("..." animates while thinking, "" hides it).
+func set_bubble(text: String) -> void:
+	_bubble_text = text
+	_bubble.text = text
+
+
+## Turn towards a point (the player while chatting).
+func face_point(p: Vector3) -> void:
+	_talk_point = p
+	_yaw_target = atan2(p.x - position.x, p.z - position.z)
 
 
 func is_walking() -> bool:
@@ -167,7 +210,9 @@ func _process(delta: float) -> void:
 	if player_controlled:
 		return
 	# Healthy villagers stroll around their own building now and then.
-	if not is_walking() and not _wants_hut and not stays_home and state in ["ok", "idle"]:
+	if _bubble_text == "...":
+		_bubble.text = ".".repeat(1 + int(Time.get_ticks_msec() / 350.0) % 3)
+	if not talking and not npc_chat and not is_walking() and not _wants_hut and not stays_home and state in ["ok", "idle"]:
 		_next_stroll -= delta
 		if _next_stroll <= 0.0:
 			_next_stroll = randf_range(4.0, 9.0)
@@ -187,6 +232,11 @@ func _process(delta: float) -> void:
 	elif _wants_hut:
 		_yaw_target = hut_face
 		_play("Lie_Idle")
+	elif job_busy:
+		_play(work_anim)
+	elif talking or npc_chat:
+		face_point(_talk_point)
+		_play("Idle_A")
 	elif state == "working":
 		_yaw_target = face_home
 		_play(work_anim)

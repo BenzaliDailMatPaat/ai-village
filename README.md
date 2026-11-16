@@ -21,6 +21,15 @@ States: **ok** (strolls near its building), **working** (work animation), **fail
 
 The game holds no keys, tokens or personal data. The n8n API key lives only in n8n.
 
+## Talk (v3)
+The game posts `{agent, message, history}` to `http://127.0.0.1:5678/webhook/village-talk` (n8n "21 Village Talk").
+The villager answers from real facts (its state, last run, failed node and error message), using Claude Haiku with a local qwen3 fallback.
+Answers take about 5-30 s. Villagers only suggest fixes, they never change anything.
+
+## Jobs (v2)
+The game posts `{agent, input, job, confirm}` to `http://127.0.0.1:5678/webhook/village-job` (n8n "22 Village Jobs"). Only five jobs exist; nothing else can be started from the game.
+Villagers also greet you first and chat with each other (code-written lines from real status, no AI cost).
+
 ## Run
 Open the folder in Godot 4.7 (Import > select `project.godot`) and press **F5**. Or:
 ```
@@ -29,13 +38,16 @@ Godot_v4.7.2-stable_win64.exe --path C:\Projects\ai-village
 
 ## Controls
 - **Tab** or the top-right button: walk mode / monitor mode
+- **T** (walk mode, next to a villager): talk. Esc leaves the chat. "What went wrong?" asks a failed villager for its error and fix steps
 - **WASD / arrows**: walk (walk mode)
 - **Right-drag or Q/E**: turn the camera. **Wheel**: zoom. **R**: slow turntable
+- **Job button** (orange, in the chat): give the villager its job: Paladin sorts the inbox, Bard re-plans today (press twice), Mage researches the topic in the box, Sage answers the question in the box
+- **Mark done** (green): type what you finished, the villager ticks the matching task in your notes (n8n "16 Done")
 - **Demo failure** button or **F9**: pretend one agent failed (cycles sorter, planner, deep, ask, off). Only the reply is faked
 - **F5**: refresh now
 
 ## Command line (after `--`)
-`--feed=<url>` `--mode=walk|monitor` `--demo=<key>` `--demo-off-after=<s>` `--yaw=<deg>` `--shot=<file.png> --shot-after=<s>` (screenshot and quit, used for testing)
+`--feed=<url>` `--talk=<agent>:<message>` `--mode=walk|monitor` `--demo=<key>` `--demo-off-after=<s>` `--yaw=<deg>` `--shot=<file.png> --shot-after=<s>` (screenshot and quit, used for testing)
 
 ## Folders
 - `scripts/` 3D village (main scene `main.tscn`)

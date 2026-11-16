@@ -511,11 +511,11 @@ func _greeting(v: Node3D) -> String:
 
 
 ## v2: give the villager its job (22 Village Jobs). Sage and Mage use the text box as input.
-func _give_job(job := "main") -> void:
+func _give_job(job := "main", typed := "") -> void:
 	var v := _talk_with
 	if v == null or _job_for != null:
 		return
-	var input := _chat_input.text.strip_edges()
+	var input := typed if typed != "" else _chat_input.text.strip_edges()
 	if job == "done":
 		if input.length() < 3:
 			_chat_log.append_text("[color=#aaaaaa](type what you finished in the box first, for example \"checked Equity Edge rules\")[/color]\n")
@@ -536,7 +536,10 @@ func _give_job(job := "main") -> void:
 		_chat_log.append_text("[color=#f2b84b]Bard:[/color] That rewrites today's plan in your Journal. Press again if you're sure.\n")
 		return
 	_chat_input.text = ""
-	_chat_log.append_text("[color=#8ecbff]You give a job:[/color] %s%s\n" % [_bb(JOB_LABELS[v.key].trim_prefix("Job: ").split(" (")[0]), (" \"" + _bb(input) + "\"") if input != "" else ""])
+	if v.key == "ask":
+		_chat_log.append_text("[color=#8ecbff]You:[/color] %s\n" % _bb(input))
+	else:
+		_chat_log.append_text("[color=#8ecbff]You give a job:[/color] %s%s\n" % [_bb(JOB_LABELS[v.key].trim_prefix("Job: ").split(" (")[0]), (" \"" + _bb(input) + "\"") if input != "" else ""])
 	_job_for = v
 	v.job_busy = true
 	v.set_bubble("On it!")
@@ -575,6 +578,48 @@ func _on_job(result: int, code: int, _headers: PackedStringArray, body: PackedBy
 	_poll()
 
 
+## Recognise commands in a chat line. Returns {job, input} or {} for normal chat.
+## "mark X as bought", "I bought X", "I did X", "done: X" -> Mark done (any villager).
+## "ask: X" (Sage), "research: X" / "deep: X" (Mage), "sort the inbox" (Paladin) -> that villager's job.
+func _chat_command(text: String) -> Dictionary:
+	var low := text.to_lower().replace("'", "").replace("’", "").strip_edges()
+	# A "done" command can be anywhere: "I have bought X", "I've finished X", "mark X as done", "done: X".
+	var done_re := RegEx.new()
+	done_re.compile("(?:^done:|\\bmark(?:ed)?\\b|\\bi(?:ve|\\s+have|\\s+just|\\s+already)*\\s+(?:did|done|finished|bought|got|checked|completed|paid|sent|fixed|cleaned)\\b)")
+	if done_re.search(low):
+		# Pick the sentence that names the task: words left after dropping command and filler words.
+		var drop := RegEx.new()
+		drop.compile("\\b(?:done|mark|marked|as|i|i've|ive|have|has|just|already|did|finished|bought|buy|got|checked|completed|complete|paid|sent|fixed|cleaned|it|that|this|them|the|a|an|my|our|some|all|of|on|for|please|both|remove|reminders?|tasks?|can|you|now|to)\\b")
+		var sentences := low.replace("done:", "").split(".", false)
+		var best := ""
+		for s in sentences:
+			for part in s.split("!", false):
+				var what := " ".join(drop.sub(part, " ", true).split(" ", false)).strip_edges()
+				if what.length() >= 3 and (best == "" or done_re.search(part)):
+					best = what
+					if done_re.search(part):
+						break
+			if best != "" and done_re.search(s):
+				break
+		if best != "":
+			return {"job": "done", "input": best}
+	var key: String = _talk_with.key
+	if key == "ask":
+		if low.begins_with("ask:"):
+			return {"job": "main", "input": text.substr(4).strip_edges()}
+		# The Sage's job IS answering from your notes, so questions go to 07 Ask Notes.
+		# Only small talk about the Sage itself stays normal chat.
+		var about_me := RegEx.new()
+		about_me.compile("(went wrong|\\bfix\\b|how are you|your status|what do you do|who are you|are you ok|^hi\\b|^hey\\b|^hello\\b|thanks|thank you)")
+		if about_me.search(low) == null and low.length() >= 6:
+			return {"job": "main", "input": text}
+	if key == "deep" and (low.begins_with("research:") or low.begins_with("deep:")):
+		return {"job": "main", "input": text.substr(text.find(":") + 1).strip_edges()}
+	if key == "sorter" and low.contains("sort") and low.contains("inbox"):
+		return {"job": "main", "input": ""}
+	return {}
+
+
 static func _bb(text: String) -> String:
 	return text.replace("[", "[lb]")  # so replies can't inject BBCode
 
@@ -582,6 +627,12 @@ static func _bb(text: String) -> String:
 func _send_talk(text: String) -> void:
 	text = text.strip_edges()
 	if _waiting or text == "" or _talk_with == null:
+		return
+	# Commands typed in the chat become real jobs (same words as Telegram). Everything else is chat.
+	var cmd := _chat_command(text)
+	if not cmd.is_empty():
+		_chat_input.text = ""
+		_give_job(cmd["job"], cmd["input"])
 		return
 	_chat_input.text = ""
 	_chat_log.append_text("[color=#8ecbff]You:[/color] %s\n" % _bb(text))

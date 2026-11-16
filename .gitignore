@@ -1,0 +1,7 @@
+# Godot cache (rebuilt on open)
+.godot/
+# Kenney extras we don't need in git
+*.url
+# never commit secrets or local overrides
+.env
+*.local.cfg

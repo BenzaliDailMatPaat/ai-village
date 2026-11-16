@@ -27,7 +27,7 @@ The villager answers from real facts (its state, last run, failed node and error
 Answers take about 5-30 s. Villagers only suggest fixes, they never change anything.
 
 ## Jobs (v2)
-The game posts `{agent, input, job, confirm}` to `http://127.0.0.1:5678/webhook/village-job` (n8n "22 Village Jobs"). Only five jobs exist; nothing else can be started from the game.
+The game posts `{agent, input, job, confirm}` to `http://127.0.0.1:5678/webhook/village-job` (n8n "22 Village Jobs"). Only five jobs exist (plus `job: "retry"`, which re-runs a failed agent with its old input); nothing else can be started from the game.
 Villagers also greet you first and chat with each other (code-written lines from real status, no AI cost).
 
 ## Run
@@ -42,6 +42,7 @@ Godot_v4.7.2-stable_win64.exe --path C:\Projects\ai-village
 - **WASD / arrows**: walk (walk mode)
 - **Right-drag or Q/E**: turn the camera. **Wheel**: zoom. **R**: slow turntable
 - **Job button** (orange, in the chat): give the villager its job: Paladin sorts the inbox, Bard re-plans today (press twice), Mage researches the topic in the box, Sage answers the question in the box
+- **Retry last run** (red, only on a failed villager): runs its failed job again with the same input. Typing "retry" or "try again" does the same
 - **Mark done** (green): type what you finished, the villager ticks the matching task in your notes (n8n "16 Done")
 - **Demo failure** button or **F9**: pretend one agent failed (cycles sorter, planner, deep, ask, off). Only the reply is faked
 - **F5**: refresh now

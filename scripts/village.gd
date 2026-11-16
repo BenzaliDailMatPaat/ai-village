@@ -94,6 +94,7 @@ const JOB_LABELS := {
 var _job_http: HTTPRequest
 var _job_url := ""
 var _job_button: Button
+var _retry_button: Button  # only on a sick villager: re-runs its failed run with the same input
 var _job_for: Node3D = null
 var _plan_armed := false
 
@@ -425,6 +426,13 @@ func _build_chat(ui: CanvasLayer) -> void:
 	_job_button.add_theme_color_override("font_color", Color("f2b84b"))
 	_job_button.pressed.connect(_give_job)
 	row.add_child(_job_button)
+	# "Retry": 22 checks the newest run really failed, then runs it again with the same input.
+	_retry_button = Button.new()
+	_retry_button.text = "Retry last run"
+	_retry_button.focus_mode = Control.FOCUS_NONE
+	_retry_button.add_theme_color_override("font_color", Color("ff8a80"))
+	_retry_button.pressed.connect(func(): _give_job("retry"))
+	row.add_child(_retry_button)
 	# "Mark done": tell any villager what you finished; 16 Done ticks it off in your notes.
 	var done_btn := Button.new()
 	done_btn.text = "Mark done (type it)"
@@ -460,6 +468,7 @@ func _open_chat(v: Node3D) -> void:
 	get_tree().create_timer(4.0).timeout.connect(func(): if _talk_with == v and not _waiting: v.set_bubble(""))
 	_job_button.visible = JOB_LABELS.has(v.key)
 	_job_button.text = JOB_LABELS.get(v.key, "")
+	_retry_button.visible = _can_retry(v)
 	_plan_armed = false
 	_chat.visible = true
 	_hint.visible = false
@@ -500,7 +509,7 @@ func _greeting(v: Node3D) -> String:
 		"failed":
 			if info.get("demo", false):
 				return "Ugh... I'm lying at the church (demo failure). Ask me what went wrong!"
-			return "Ugh... my last run failed (%s). Ask me \"What went wrong?\" and I'll check the error." % str(info.get("last_run", "?"))
+			return "Ugh... my last run failed (%s). Ask me \"What went wrong?\", or press Retry once the cause is fixed." % str(info.get("last_run", "?"))
 		"working":
 			return hi + " I'm busy, my run is going right now. Ask away though."
 		"idle":
@@ -516,6 +525,18 @@ func _give_job(job := "main", typed := "") -> void:
 	if v == null or _job_for != null:
 		return
 	var input := typed if typed != "" else _chat_input.text.strip_edges()
+	if job == "retry":
+		if not _can_retry(v):
+			_chat_log.append_text("[color=#f2b84b]%s:[/color] My last run worked, there's nothing to retry.\n" % v.cls)
+			return
+		_chat_log.append_text("[color=#8ecbff]You:[/color] Try your last run again.\n")
+		_job_for = v
+		v.job_busy = true
+		v.set_bubble("Trying again...")
+		_retry_button.visible = false
+		if _job_http.request(_job_url, ["Content-Type: application/json"], HTTPClient.METHOD_POST, JSON.stringify({"agent": v.key, "job": "retry"})) != OK:
+			_on_job(HTTPRequest.RESULT_CANT_CONNECT, 0, PackedStringArray(), PackedByteArray())
+		return
 	if job == "done":
 		if input.length() < 3:
 			_chat_log.append_text("[color=#aaaaaa](type what you finished in the box first, for example \"checked Equity Edge rules\")[/color]\n")
@@ -567,6 +588,7 @@ func _on_job(result: int, code: int, _headers: PackedStringArray, body: PackedBy
 	var reply := str(data.get("reply", ""))
 	if _talk_with == v:
 		_chat_log.append_text("[color=#f2b84b]%s:[/color] %s\n" % [v.cls, _bb(reply)])
+		_retry_button.visible = _can_retry(v) and not data.get("started", false)
 	var bubble := "Done!" if data.get("done", false) else ("Working on it!" if data.get("started", false) else "")
 	if data.get("job", "") == "mark done":
 		bubble = "Nice work!" if reply.contains("✅") or reply.to_lower().contains("marked") else "Hmm, which one?"
@@ -604,6 +626,10 @@ func _chat_command(text: String) -> Dictionary:
 		if best != "":
 			return {"job": "done", "input": best}
 	var key: String = _talk_with.key
+	var retry_re := RegEx.new()
+	retry_re.compile("^(?:please\\s+)?(?:retry|try (?:it |that )?again|run (?:it |that )?again|rerun)\\b")
+	if retry_re.search(low) and _can_retry(_talk_with):
+		return {"job": "retry", "input": ""}
 	if key == "ask":
 		if low.begins_with("ask:"):
 			return {"job": "main", "input": text.substr(4).strip_edges()}
@@ -618,6 +644,11 @@ func _chat_command(text: String) -> Dictionary:
 	if key == "sorter" and low.contains("sort") and low.contains("inbox"):
 		return {"job": "main", "input": ""}
 	return {}
+
+
+## Retry only for a really failed job villager (not the Cleric, not a demo failure).
+func _can_retry(v: Node3D) -> bool:
+	return v != null and JOB_LABELS.has(v.key) and v.state == "failed" and not v.last_info.get("demo", false)
 
 
 static func _bb(text: String) -> String:

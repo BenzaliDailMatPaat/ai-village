@@ -4,7 +4,8 @@ A small Godot 4 3D village where each of my n8n AI agents is an RPG villager sho
 v1 is **watch mode**: see at a glance who is fine, who is working, and who failed.
 
 
-https://github.com/user-attachments/assets/633925b6-bfd0-4330-8dfd-cf6ce81e96a4
+https://github.com/user-attachments/assets/f51585b4-0dd7-4380-b4b3-82195b4fd24c
+
 
 | Villager | Agent | Building |
 |---|---|---|

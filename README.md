@@ -3,6 +3,9 @@
 A small Godot 4 3D village where each of my n8n AI agents is an RPG villager showing live status.
 v1 is **watch mode**: see at a glance who is fine, who is working, and who failed.
 
+
+https://github.com/user-attachments/assets/633925b6-bfd0-4330-8dfd-cf6ce81e96a4
+
 | Villager | Agent | Building |
 |---|---|---|
 | Paladin (Knight) | 01 Inbox Sorter | barracks |
